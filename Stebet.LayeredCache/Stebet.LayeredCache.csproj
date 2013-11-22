@@ -44,6 +44,7 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- A reference to the entire .NET Framework is automatically included -->
+    <None Include="Stebet.LayeredCache.nuspec" />
     <None Include="Stebet.LayeredCache.pfx" />
   </ItemGroup>
   <ItemGroup>
