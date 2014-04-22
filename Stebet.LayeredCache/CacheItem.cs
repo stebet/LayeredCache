@@ -1,7 +1,7 @@
-﻿using System;
-
-namespace Stebet.LayeredCache
+﻿namespace Stebet.LayeredCache
 {
+    using System;
+
     public class CacheItem<T>
     {
         public T Item { get; private set; }
