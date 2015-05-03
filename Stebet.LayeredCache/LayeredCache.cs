@@ -78,12 +78,7 @@ namespace Stebet.LayeredCache
                     Debug.WriteLine($"Found valid item with key={key} in {cache.GetType()}", key, cache.GetType());
 
                     // Let's populate the missing cache items
-                    while (cacheStack != null && cacheStack.Count > 0)
-                    {
-                        ICache cacheToPopulate = cacheStack.Pop();
-                        Debug.WriteLine($"Populating {cache.GetType()} with key={key}.");
-                        await cacheToPopulate.AddAsync(key, result).ConfigureAwait(false);
-                    }
+                    await RepopulateCacheWhereMissing(key, cacheStack, result).ConfigureAwait(false);
 
                     return result.Item;
                 }
@@ -104,12 +99,18 @@ namespace Stebet.LayeredCache
             result = new CacheItem<T>(item, expiresAt);
 
             // Let's populate the missing cache items
+            await RepopulateCacheWhereMissing(key, cacheStack, result).ConfigureAwait(false);
+            return result.Item;
+        }
+
+        private static async Task RepopulateCacheWhereMissing<T>(string key, Stack<ICache> cacheStack, CacheItem<T> result)
+        {
             while (cacheStack != null && cacheStack.Count > 0)
             {
-                await cacheStack.Pop().AddAsync(key, result).ConfigureAwait(false);
+                ICache cacheToPopulate = cacheStack.Pop();
+                Debug.WriteLine($"Populating {cacheToPopulate.GetType()} with key={key}.");
+                await cacheToPopulate.AddAsync(key, result).ConfigureAwait(false);
             }
-
-            return result.Item;
         }
     }
 }
