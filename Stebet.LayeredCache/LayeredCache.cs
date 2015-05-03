@@ -1,4 +1,6 @@
-﻿using System;
+﻿// Copyright (c) Stefán Jökull Sigurðarson. All rights reserved.
+
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -14,7 +16,7 @@ namespace Stebet.LayeredCache
         /// <summary>
         /// Stores the cache implementations.
         /// </summary>
-        private readonly List<ICache> caches;
+        private readonly IList<ICache> _caches;
 
         /// <summary>
         /// Initializes a new instance of the LayeredCache class.
@@ -27,7 +29,7 @@ namespace Stebet.LayeredCache
                 throw new ArgumentException("The LayeredCache needs at least one ICache implementation.");
             }
 
-            this.caches = caches.ToList();
+            _caches = caches.ToList();
         }
 
         /// <summary>
@@ -37,86 +39,10 @@ namespace Stebet.LayeredCache
         /// <param name="key">The cache key.</param>
         /// <param name="item">The item to put in the cache.</param>
         /// <param name="expiresAt">The expiry date of the item to put in the cache.</param>
-        public void Set<T>(string key, T item, DateTime expiresAt)
+        public async Task SetAsync<T>(string key, T item, DateTime expiresAt)
         {
             var cacheItem = new CacheItem<T>(item, expiresAt);
-            foreach (var cache in this.caches)
-            {
-                cache.Add(key, cacheItem);
-            }
-        }
-
-        /// <summary>
-        /// Checks the caches for a value of type T and populates them if they don't contain the value.
-        /// </summary>
-        /// <typeparam name="T">The type of the item to fetch from the cache.</typeparam>
-        /// <param name="key">The cache key.</param>
-        /// <param name="fetchItem">A method that fetches the value if it is not found in the cache.</param>
-        /// <param name="expiresAt">The expiry date of the item.</param>
-        /// <returns>A value of type T.</returns>
-        public T Get<T>(string key, Func<T> fetchItem, DateTime expiresAt)
-        {
-            return this.Get(key, fetchItem, x => expiresAt);
-        }
-
-        /// <summary>
-        /// Checks the caches for a value of type T and populates them if they don't contain the value.
-        /// </summary>
-        /// <typeparam name="T">The type of the item to fetch from the cache.</typeparam>
-        /// <param name="key">The cache key.</param>
-        /// <param name="fetchItem">A method that fetches the value if it is not found in the cache.</param>
-        /// <param name="expiryEvaluator">A method that extracts the expiry date from the result.</param>
-        /// <returns>A value of type T.</returns>
-        public T Get<T>(string key, Func<T> fetchItem, Func<T, DateTime> expiryEvaluator)
-        {
-            Stack<ICache> cacheStack = null;
-            CacheItem<T> result;
-
-            foreach (ICache cache in this.caches)
-            {
-                result = cache.Get<T>(key);
-
-                if (result != null)
-                {
-                    // If our item has expired, let's null it out.
-                    if (result.ExpiresAt < DateTime.UtcNow)
-                    {
-                        result = null;
-                    }
-                }
-
-                if (result != null)
-                {
-                    // Let's populate the missing cache items
-                    while (cacheStack != null && cacheStack.Count > 0)
-                    {
-                        cacheStack.Pop().Add(key, result);
-                    }
-
-                    return result.Item;
-                }
-
-                if (cacheStack == null)
-                {
-                    cacheStack = new Stack<ICache>(this.caches.Count);
-                }
-
-                // Expired or item not found, let's mark our cache for population and try the next cache (if available).
-                cacheStack.Push(cache);
-            }
-
-            // Still haven't found our item, let's get it from our "data store" and extract the expiryDate.
-            T item = fetchItem();
-            DateTime expiresAt = expiryEvaluator(item);
-            result = new CacheItem<T>(item, expiresAt);
-
-            // Let's populate the missing cache items
-            while (cacheStack != null && cacheStack.Count > 0)
-            {
-                cacheStack.Pop().Add(key, result);
-            }
-
-            return result.Item;
+            _caches.Select(async cache => await cache.AddAsync(key, cacheItem).ConfigureAwait(false));
         }
 
         /// <summary>
@@ -127,10 +53,7 @@ namespace Stebet.LayeredCache
         /// <param name="fetchItemAsync">A method that asynchronously fetches the value if it is not found in the cache.</param>
         /// <param name="expiresAt">The expiry date of the item.</param>
         /// <returns>A Task containing the value of type T.</returns>
-        public Task<T> GetAsync<T>(string key, Func<Task<T>> fetchItemAsync, DateTime expiresAt)
-        {
-            return this.GetAsync(key, fetchItemAsync, x => expiresAt);
-        }
+        public Task<T> GetAsync<T>(string key, Func<Task<T>> fetchItemAsync, DateTime expiresAt) => GetAsync(key, fetchItemAsync, x => expiresAt);
 
         /// <summary>
         /// Checks the caches for a value of type T and asynchronously populates them if they don't contain the value.
@@ -145,21 +68,21 @@ namespace Stebet.LayeredCache
             Stack<ICache> cacheStack = null;
             CacheItem<T> result;
 
-            foreach (ICache cache in this.caches)
+            foreach (ICache cache in _caches)
             {
-                Debug.WriteLine("Looking for item with key={0} in {1}.", key, cache.GetType());
-                result = cache.Get<T>(key);
+                Debug.WriteLine($"Looking for item with key={key} in {cache.GetType()}.");
+                result = await cache.GetAsync<T>(key).ConfigureAwait(false);
 
-                if (result != null && result.ExpiresAt < DateTime.UtcNow)
+                if (result != null)
                 {
-                    Debug.WriteLine("Found valid item with key={0} in {1}", key, cache.GetType());
+                    Debug.WriteLine($"Found valid item with key={key} in {cache.GetType()}", key, cache.GetType());
 
                     // Let's populate the missing cache items
                     while (cacheStack != null && cacheStack.Count > 0)
                     {
                         ICache cacheToPopulate = cacheStack.Pop();
-                        Debug.WriteLine("Populating {1} with key={0}.", key, cache.GetType());
-                        cacheToPopulate.Add(key, result);
+                        Debug.WriteLine($"Populating {cache.GetType()} with key={key}.");
+                        await cacheToPopulate.AddAsync(key, result).ConfigureAwait(false);
                     }
 
                     return result.Item;
@@ -167,11 +90,11 @@ namespace Stebet.LayeredCache
 
                 if (cacheStack == null)
                 {
-                    cacheStack = new Stack<ICache>(this.caches.Count);
+                    cacheStack = new Stack<ICache>(_caches.Count);
                 }
 
                 // Expired or item not found, let's mark our cache for population and try the next cache (if available).
-                Debug.WriteLine("Didn't fint valid item with key={0} in {1}. Marking for population.", key, cache.GetType());
+                Debug.WriteLine($"Didn't fint valid item with key={key} in {cache.GetType()}. Marking for population.");
                 cacheStack.Push(cache);
             }
 
@@ -183,7 +106,7 @@ namespace Stebet.LayeredCache
             // Let's populate the missing cache items
             while (cacheStack != null && cacheStack.Count > 0)
             {
-                cacheStack.Pop().Add(key, result);
+                await cacheStack.Pop().AddAsync(key, result).ConfigureAwait(false);
             }
 
             return result.Item;

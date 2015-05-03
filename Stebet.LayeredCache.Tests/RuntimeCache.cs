@@ -1,34 +1,29 @@
-﻿using System.Runtime.Caching;
+﻿// Copyright (c) Stefán Jökull Sigurðarson. All rights reserved.
+
+using System.Runtime.Caching;
+using System.Threading.Tasks;
 
 namespace Stebet.LayeredCache.Tests
 {
     public class RuntimeCache : ICache
     {
-        private readonly MemoryCache cache;
+        private readonly MemoryCache _cache;
 
         public RuntimeCache(string cacheName)
         {
-            this.cache = new MemoryCache(cacheName);
+            _cache = new MemoryCache(cacheName);
         }
 
-        public void Add<T>(string key, CacheItem<T> item)
-        {
-            cache.Add(key, item, item.ExpiresAt);
-        }
+        public virtual Task AddAsync<T>(string key, CacheItem<T> item) => Task.FromResult(_cache.Add(key, item, item.ExpiresAt));
 
-        public void Remove(string key)
-        {
-            cache.Remove(key);
-        }
+        public virtual Task RemoveAsync(string key) => Task.FromResult(_cache.Remove(key));
 
-        public void Clear()
-        {
-            cache.Trim(100);
-        }
+        public virtual Task ClearAsync() => Task.FromResult(_cache.Trim(100));
 
-        public CacheItem<T> Get<T>(string key)
+        public virtual Task<CacheItem<T>> GetAsync<T>(string key)
         {
-            return cache.Get(key) as CacheItem<T>;
+            var item = _cache.Get(key) as CacheItem<T>;
+            return Task.FromResult((item != null && item.IsExpired) ? null : item);
         }
     }
 }

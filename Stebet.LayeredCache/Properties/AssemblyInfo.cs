@@ -1,4 +1,8 @@
-﻿using System.Reflection;
+﻿// Copyright (c) Stefán Jökull Sigurðarson. All rights reserved.
+
+
+
+using System.Reflection;
 using System.Resources;
 
 // General Information about an assembly is controlled through the following 
@@ -9,7 +13,7 @@ using System.Resources;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
 [assembly: AssemblyProduct("Stebet.LayeredCache")]
-[assembly: AssemblyCopyright("Copyright ©  2013")]
+[assembly: AssemblyCopyright("Copyright \u00A9  2013")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 [assembly: NeutralResourcesLanguage("en")]

@@ -1,15 +1,18 @@
-﻿using System;
+﻿// Copyright (c) Stefán Jökull Sigurðarson. All rights reserved.
+
+using System;
 using System.Diagnostics;
 using System.Runtime.Caching;
 using System.Threading;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using System.Threading.Tasks;
 
 namespace Stebet.LayeredCache.Tests
 {
     [TestClass]
     public class LayeredCacheTests
     {
-        private Random random = new Random();
+        private Random _random = new Random();
 
         [TestMethod]
         [ExpectedException(typeof(ArgumentException))]
@@ -19,53 +22,53 @@ namespace Stebet.LayeredCache.Tests
         }
 
         [TestMethod]
-        public void HitsDataStoreWhenEmpty()
+        public async Task HitsDataStoreWhenEmpty()
         {
             LayeredCache cache = new LayeredCache(new RuntimeCache(Guid.NewGuid().ToString()));
-            Assert.IsTrue(Time(() => cache.Get("GetPerson", () => CreatePerson(), DateTime.UtcNow.AddMinutes(1))) > 100);
+            Assert.IsTrue(Time(async () => await cache.GetAsync("GetPerson", () => CreatePersonAsync(), DateTime.UtcNow.AddMinutes(1))) > 100);
         }
 
         [TestMethod]
-        public void ReturnsFromCache()
+        public async Task ReturnsFromCache()
         {
             LayeredCache cache = new LayeredCache(new RuntimeCache(Guid.NewGuid().ToString()));
-            cache.Get("GetPerson", () => CreatePerson(), DateTime.UtcNow.AddMinutes(1));
-            Assert.IsTrue(Time(() => cache.Get("GetPerson", () => CreatePerson(), DateTime.UtcNow.AddMinutes(1))) < 10);
+            await cache.GetAsync("GetPerson", () => CreatePersonAsync(), DateTime.UtcNow.AddMinutes(1));
+            Assert.IsTrue(Time(async () => await cache.GetAsync("GetPerson", () => CreatePersonAsync(), DateTime.UtcNow.AddMinutes(1))) < 10);
         }
 
         [TestMethod]
-        public void ShouldHitSecondCacheIfFirstFails()
+        public async Task ShouldHitSecondCacheIfFirstFails()
         {
             RuntimeCache runtimeCache = new RuntimeCache(Guid.NewGuid().ToString());
-            LayeredCache cache = new LayeredCache(runtimeCache, new DelayedCache());
-            cache.Get("GetPerson", () => CreatePerson(), DateTime.UtcNow.AddMinutes(1));
-            runtimeCache.Remove("GetPerson");
-            long elapsedTime = Time(() => cache.Get("GetPerson", () => CreatePerson(), DateTime.UtcNow.AddMinutes(1)));
+            LayeredCache cache = new LayeredCache(runtimeCache, new DelayedCache(Guid.NewGuid().ToString()));
+            await cache.GetAsync("GetPerson", () => CreatePersonAsync(), DateTime.UtcNow.AddMinutes(1));
+            await runtimeCache.RemoveAsync("GetPerson");
+            long elapsedTime = Time(async () => await cache.GetAsync("GetPerson", () => CreatePersonAsync(), DateTime.UtcNow.AddMinutes(1)));
             Assert.IsTrue(elapsedTime > 10 && elapsedTime < 60);
         }
 
         [TestMethod]
-        public void ShouldRepopulateEmptyCache()
+        public async Task ShouldRepopulateEmptyCache()
         {
             RuntimeCache runtimeCache = new RuntimeCache(Guid.NewGuid().ToString());
-            LayeredCache cache = new LayeredCache(runtimeCache, new DelayedCache());
-            cache.Get("GetPerson", () => CreatePerson(), DateTime.UtcNow.AddMinutes(1));
-            runtimeCache.Remove("GetPerson");
-            cache.Get("GetPerson", () => CreatePerson(), DateTime.UtcNow.AddMinutes(1));
-            long elapsedTime = Time(() => cache.Get("GetPerson", () => CreatePerson(), DateTime.UtcNow.AddMinutes(1)));
+            LayeredCache cache = new LayeredCache(runtimeCache, new DelayedCache(Guid.NewGuid().ToString()));
+            await cache.GetAsync("GetPerson", () => CreatePersonAsync(), DateTime.UtcNow.AddMinutes(1));
+            await runtimeCache.RemoveAsync("GetPerson");
+            await cache.GetAsync("GetPerson", () => CreatePersonAsync(), DateTime.UtcNow.AddMinutes(1));
+            long elapsedTime = Time(async () => await cache.GetAsync("GetPerson", () => CreatePersonAsync(), DateTime.UtcNow.AddMinutes(1)));
             Assert.IsTrue(elapsedTime < 10);
         }
 
-        private Person CreatePerson()
+        private Task<Person> CreatePersonAsync()
         {
-            Thread.Sleep(random.Next(100, 200));
-            return new Person { Name = Guid.NewGuid().ToString(), Age = random.Next(15, 80) };
+            Thread.Sleep(_random.Next(100, 200));
+            return Task.FromResult(new Person { Name = Guid.NewGuid().ToString(), Age = _random.Next(15, 80) });
         }
 
-        private long Time(Action action)
+        private long Time(Func<Task> action)
         {
             Stopwatch timer = Stopwatch.StartNew();
-            action();
+            action().Wait();
             return timer.ElapsedMilliseconds;
         }
     }
@@ -75,40 +78,41 @@ namespace Stebet.LayeredCache.Tests
         public string Name { get; set; }
         public int Age { get; set; }
 
-        public override string ToString()
-        {
-            return string.Format("{0} ({1})", this.Name, this.Age);
-        }
+        public override string ToString() => string.Format("{0} ({1})", Name, Age);
     }
 
-    public class DelayedCache : ICache
+    public class DelayedCache : RuntimeCache
     {
-        private Random random = new Random();
-        private MemoryCache cache = MemoryCache.Default;
+        private Random _random = new Random();
 
-        public void Add<T>(string key, CacheItem<T> item)
+        public DelayedCache(string cacheName) : base(cacheName)
         {
-            Thread.Sleep(random.Next(10, 50));
-            cache.Add(key, item, item.ExpiresAt);
         }
 
-        public void Remove(string key)
+        private void Delay() => Thread.Sleep(_random.Next(10, 50));
+        
+        public override Task AddAsync<T>(string key, CacheItem<T> item)
         {
-            Thread.Sleep(random.Next(10, 50));
-            cache.Remove(key);
+            Delay();
+            return base.AddAsync(key, item);
         }
 
-        public void Clear()
+        public override Task RemoveAsync(string key)
         {
-            Thread.Sleep(random.Next(10, 50));
-            cache.Trim(100);
+            Delay();
+            return base.RemoveAsync(key);
         }
 
-        public CacheItem<T> Get<T>(string key)
+        public override Task ClearAsync()
         {
-            Thread.Sleep(random.Next(10, 50));
-            return cache.Get(key) as CacheItem<T>;
+            Delay();
+            return base.ClearAsync();
+        }
+
+        public override Task<CacheItem<T>> GetAsync<T>(string key)
+        {
+            Delay();
+            return base.GetAsync<T>(key);
         }
     }
-
 }

@@ -1,10 +1,14 @@
-﻿namespace Stebet.LayeredCache
+﻿// Copyright (c) Stefán Jökull Sigurðarson. All rights reserved.
+
+using System.Threading.Tasks;
+
+namespace Stebet.LayeredCache
 {
     public interface ICache
     {
-        void Add<T>(string key, CacheItem<T> item);
-        void Remove(string key);
-        void Clear();
-        CacheItem<T> Get<T>(string key);
+        Task AddAsync<T>(string key, CacheItem<T> item);
+        Task RemoveAsync(string key);
+        Task ClearAsync();
+        Task<CacheItem<T>> GetAsync<T>(string key);
     }
 }

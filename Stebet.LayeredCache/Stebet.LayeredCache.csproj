@@ -37,15 +37,15 @@
     <DocumentationFile>bin\Release\Stebet.LayeredCache.XML</DocumentationFile>
   </PropertyGroup>
   <PropertyGroup>
-    <SignAssembly>true</SignAssembly>
+    <SignAssembly>false</SignAssembly>
   </PropertyGroup>
   <PropertyGroup>
-    <AssemblyOriginatorKeyFile>Stebet.LayeredCache.pfx</AssemblyOriginatorKeyFile>
+    <AssemblyOriginatorKeyFile>
+    </AssemblyOriginatorKeyFile>
   </PropertyGroup>
   <ItemGroup>
     <!-- A reference to the entire .NET Framework is automatically included -->
     <None Include="Stebet.LayeredCache.nuspec" />
-    <None Include="Stebet.LayeredCache.pfx" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="CacheItem.cs" />
