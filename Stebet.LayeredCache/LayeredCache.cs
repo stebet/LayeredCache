@@ -26,7 +26,7 @@ namespace Stebet.LayeredCache
         {
             if (caches.Length == 0)
             {
-                throw new ArgumentException("The LayeredCache needs at least one ICache implementation.");
+                throw new ArgumentException("The LayeredCache needs at least one ICache implementation.", nameof(caches));
             }
 
             _caches = caches.ToList();

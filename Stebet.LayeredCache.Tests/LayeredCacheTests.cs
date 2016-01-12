@@ -2,61 +2,58 @@
 
 using System;
 using System.Diagnostics;
-using System.Runtime.Caching;
 using System.Threading;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Threading.Tasks;
+using Xunit;
 
 namespace Stebet.LayeredCache.Tests
 {
-    [TestClass]
     public class LayeredCacheTests
     {
         private Random _random = new Random();
 
-        [TestMethod]
-        [ExpectedException(typeof(ArgumentException))]
+        [Fact]
         public void MissingCacheThrowsError()
         {
-            LayeredCache cache = new LayeredCache();
+            Assert.Throws(typeof(ArgumentException), () => new LayeredCache());
         }
 
-        [TestMethod]
+        [Fact]
         public async Task HitsDataStoreWhenEmpty()
         {
-            LayeredCache cache = new LayeredCache(new RuntimeCache(Guid.NewGuid().ToString()));
-            Assert.IsTrue(Time(async () => await cache.GetAsync("GetPerson", () => CreatePersonAsync(), DateTime.UtcNow.AddMinutes(1))) > 100);
+            LayeredCache cache = new LayeredCache(new RuntimeCache());
+            Assert.True(Time(async () => await cache.GetAsync("GetPerson", () => CreatePersonAsync(), DateTime.UtcNow.AddMinutes(1))) > 100);
         }
 
-        [TestMethod]
+        [Fact]
         public async Task ReturnsFromCache()
         {
-            LayeredCache cache = new LayeredCache(new RuntimeCache(Guid.NewGuid().ToString()));
+            LayeredCache cache = new LayeredCache(new RuntimeCache());
             await cache.GetAsync("GetPerson", () => CreatePersonAsync(), DateTime.UtcNow.AddMinutes(1));
-            Assert.IsTrue(Time(async () => await cache.GetAsync("GetPerson", () => CreatePersonAsync(), DateTime.UtcNow.AddMinutes(1))) < 10);
+            Assert.True(Time(async () => await cache.GetAsync("GetPerson", () => CreatePersonAsync(), DateTime.UtcNow.AddMinutes(1))) < 10);
         }
 
-        [TestMethod]
+        [Fact]
         public async Task ShouldHitSecondCacheIfFirstFails()
         {
-            RuntimeCache runtimeCache = new RuntimeCache(Guid.NewGuid().ToString());
+            RuntimeCache runtimeCache = new RuntimeCache();
             LayeredCache cache = new LayeredCache(runtimeCache, new DelayedCache(Guid.NewGuid().ToString()));
             await cache.GetAsync("GetPerson", () => CreatePersonAsync(), DateTime.UtcNow.AddMinutes(1));
             await runtimeCache.RemoveAsync("GetPerson");
             long elapsedTime = Time(async () => await cache.GetAsync("GetPerson", () => CreatePersonAsync(), DateTime.UtcNow.AddMinutes(1)));
-            Assert.IsTrue(elapsedTime > 10 && elapsedTime < 60);
+            Assert.True(elapsedTime > 10 && elapsedTime < 60);
         }
 
-        [TestMethod]
+        [Fact]
         public async Task ShouldRepopulateEmptyCache()
         {
-            RuntimeCache runtimeCache = new RuntimeCache(Guid.NewGuid().ToString());
+            RuntimeCache runtimeCache = new RuntimeCache();
             LayeredCache cache = new LayeredCache(runtimeCache, new DelayedCache(Guid.NewGuid().ToString()));
             await cache.GetAsync("GetPerson", () => CreatePersonAsync(), DateTime.UtcNow.AddMinutes(1));
             await runtimeCache.RemoveAsync("GetPerson");
             await cache.GetAsync("GetPerson", () => CreatePersonAsync(), DateTime.UtcNow.AddMinutes(1));
             long elapsedTime = Time(async () => await cache.GetAsync("GetPerson", () => CreatePersonAsync(), DateTime.UtcNow.AddMinutes(1)));
-            Assert.IsTrue(elapsedTime < 10);
+            Assert.True(elapsedTime < 10);
         }
 
         private Task<Person> CreatePersonAsync()
@@ -67,7 +64,7 @@ namespace Stebet.LayeredCache.Tests
 
         private long Time(Func<Task> action)
         {
-            Stopwatch timer = Stopwatch.StartNew();
+            var timer = Stopwatch.StartNew();
             action().Wait();
             return timer.ElapsedMilliseconds;
         }
@@ -85,7 +82,7 @@ namespace Stebet.LayeredCache.Tests
     {
         private Random _random = new Random();
 
-        public DelayedCache(string cacheName) : base(cacheName)
+        public DelayedCache(string cacheName) : base()
         {
         }
 
